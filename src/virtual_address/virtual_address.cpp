@@ -9,18 +9,16 @@
 using namespace std;
 
 VirtualAddress VirtualAddress::from_string(int process_id, string address) {
-    // TODO: implement me
-    return VirtualAddress(0, 0, 0);
+ return VirtualAddress(process_id, stoi(address.substr(0, PAGE_BITS), 0, 2), stoi(address.substr(PAGE_BITS, OFFSET_BITS), 0, 2));
 }
 
 
 string VirtualAddress::to_string() const {
-    // TODO: implement me
-    return "";
+  return std::bitset<10>(this->page).to_string() + std::bitset<6>(this->offset).to_string();
 }
 
 
 ostream& operator <<(ostream& out, const VirtualAddress& address) {
-    // TODO: implement me
-    return out;
+  out << "PID " << address.process_id << " @ " << address.to_string() << " [page: " << address.page << "; offset: " << address.offset << "]";
+  return out;
 }
