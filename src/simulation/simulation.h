@@ -110,4 +110,6 @@ public:
     * A list containing the indices of all frames that are not currently in use.
     */
     std::list<size_t> free_frames;
+
+    int time = 0;
 };

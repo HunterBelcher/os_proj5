@@ -6,6 +6,7 @@
  */
 
 #include "simulation/simulation.h"
+#include "page/page.h"
 #include <stdexcept>
 
 Simulation::Simulation(FlagOptions& flags)
@@ -16,16 +17,69 @@ Simulation::Simulation(FlagOptions& flags)
 }
 
 void Simulation::run() {
-    // TODO: implement me
+  for(int i =0;i<this->NUM_FRAMES;i++){
+   this->free_frames.push_back(i);
+   this->frames.emplace_back();
+  }
+  for(int i = 0; i < this->virtual_addresses.size(); i ++){
+      time = i + 1;
+      perform_memory_access(virtual_addresses[i]);
+    }
+  print_summary();
 }
 
 char Simulation::perform_memory_access(const VirtualAddress& virtual_address) {
-    // TODO: implement me
-    return 0;
+  this->processes[virtual_address.process_id]->memory_accesses++;
+  std::cout << virtual_address << "\n";
+  if(this->processes[virtual_address.process_id]->is_valid_page(virtual_address.page)){
+     PageTable::Row pageRow = this->processes[virtual_address.process_id]->page_table.rows[virtual_address.page];
+     if(pageRow.present){
+       this->processes[virtual_address.process_id]->page_table.rows[virtual_address.page].last_accessed_at = this->time;
+       std::cout << "   -> IN MEMORY\n";
+     }
+     else{
+       std::cout << "   -> PAGE FAULT\n";
+       handle_page_fault(this->processes[virtual_address.process_id], virtual_address.page);
+     }
+     std::cout << "   -> physical address " << PhysicalAddress(this->processes[virtual_address.process_id]->page_table.rows[virtual_address.page].frame, virtual_address.offset) << "\n";
+     if(frames[this->processes[virtual_address.process_id]->page_table.rows[virtual_address.page].frame].contents->is_valid_offset(virtual_address.offset)){
+       std::cout << "   -> RSS: " << processes[virtual_address.process_id]->get_rss() << "\n";
+       return frames[this->processes[virtual_address.process_id]->page_table.rows[virtual_address.page].frame].contents->get_byte_at_offset(virtual_address.offset);
+     }
+     else{
+       std::cout << "SEGFAULT - INVALID OFFSET";
+       exit(1);
+     }
+  }
+  else{
+    std::cout << "SEGFAULT - INVALID PAGE\n";
+    exit(1);
+  }
 }
 
 void Simulation::handle_page_fault(Process* process, size_t page) {
-    // TODO: implement me
+  if(process->page_table.get_present_page_count() >= this->flags.max_frames){
+    if(this->flags.strategy == ReplacementStrategy::LRU){
+      frames[process->page_table.rows[process->page_table.get_least_recently_used_page()].frame].set_page(process, page);
+      process->page_table.rows[page].frame = process->page_table.rows[process->page_table.get_least_recently_used_page()].frame;
+      process->page_table.rows[process->page_table.get_least_recently_used_page()].present = false;
+    }
+    else{
+      frames[process->page_table.rows[process->page_table.get_oldest_page()].frame].set_page(process, page);
+      process->page_table.rows[page].frame = process->page_table.rows[process->page_table.get_oldest_page()].frame;
+      process->page_table.rows[process->page_table.get_oldest_page()].present = false;
+    }
+  }
+  else{
+    frames[this->free_frames.front()].set_page(process, page);
+    process->page_table.rows[page].frame = this->free_frames.front();
+    this->free_frames.pop_front();
+  }
+  process->page_table.rows[page].loaded_at = this->time;
+  process->page_table.rows[page].last_accessed_at = this->time;
+  process->page_table.rows[page].present = true;
+  process->page_faults += 1;
+  this->page_faults++;
 }
 
 void Simulation::print_summary() {
